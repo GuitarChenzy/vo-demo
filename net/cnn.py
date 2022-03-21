@@ -72,29 +72,29 @@ class Net(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-        def forward(self, x1, x2):
-            x = torch.cat([x1, x2], dim=1)
-            x = self.conv2(self.conv1(x))
-            x = self.conv3_1(self.conv3(x))
-            x = self.conv4_1(self.conv4(x))
-            x = self.conv5_1(self.conv5(x))
-            x = self.conv6_1(self.conv6(x))
-            x = self.pool_1(x)
-            x = x.view(x.size(0), -1)
-            x = self.dropout1(x)
-            x = self.fc_1(x)
-            x = self.dropout2(x)
-            x = self.fc_2(x)
-            x = self.fc_3(x)
-            x = self.fc_4(x)
+    def forward(self, x1, x2):
+        x = torch.cat([x1, x2], dim=1)
+        x = self.conv2(self.conv1(x))
+        x = self.conv3_1(self.conv3(x))
+        x = self.conv4_1(self.conv4(x))
+        x = self.conv5_1(self.conv5(x))
+        x = self.conv6_1(self.conv6(x))
+        x = self.pool_1(x)
+        x = x.view(x.size(0), -1)
+        x = self.dropout1(x)
+        x = self.fc_1(x)
+        x = self.dropout2(x)
+        x = self.fc_2(x)
+        x = self.fc_3(x)
+        x = self.fc_4(x)
 
-            return x
+        return x
 
-        def weight_parameters(self):
-            return [param for name, param in self.named_parameters() if 'weight' in name]
+    def weight_parameters(self):
+        return [param for name, param in self.named_parameters() if 'weight' in name]
 
-        def bias_parameters(self):
-            return [param for name, param in self.named_parameters() if 'bias' in name]
+    def bias_parameters(self):
+        return [param for name, param in self.named_parameters() if 'bias' in name]
 
 def main():
     net  =Net()
