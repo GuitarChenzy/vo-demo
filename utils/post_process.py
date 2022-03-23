@@ -54,7 +54,7 @@ def plot_from_pose(seq, dir_save, pose_abs, epoch=None, args=None):
     """
     plt.close('all')
     style.use("ggplot")
-    pose_gt = np.loadtxt('dataset/ground-truth/{:02d}.txt'.format(seq))
+    pose_gt = np.loadtxt('dataset/poses/{:02d}.txt'.format(seq))
     pose_pre = np.array(pose_abs)  # [image_numbers, 6]
     plt.plot(pose_gt[:, 3], pose_gt[:, 11], '--', c='k', lw=1.5, label='Ground truth')
     if args.phase == 'Train':

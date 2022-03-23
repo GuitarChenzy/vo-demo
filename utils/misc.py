@@ -25,7 +25,7 @@ def pre_create_file_train(model_dir, log_dir, args):
     :return:
     """
 
-    dir_models = 'F:\Code\pyProject\deepvo\\' + model_dir + '/' + args.net_name
+    dir_models = '/home/czy/Projects/pyproject/vo-demo/' + model_dir + '/' + args.net_name
     dir_logs = log_dir + '/' + args.net_name
     dir_model = dir_models + '/' + args.dir0
     dir_log = dir_logs + '/' + args.dir0
