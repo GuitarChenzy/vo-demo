@@ -1,4 +1,7 @@
-dataset/*
 log/*
 model/*
+utils/__*
+net/__*
+dataset/__*
+dataset/xyz*
 
