@@ -3,7 +3,6 @@ import cv2 as cv
 
 
 def get_color(depth):
-
     up_th = 50
     low_th = 10
     th_range = up_th - low_th
@@ -54,6 +53,7 @@ detector = cv.FastFeatureDetector_create(threshold=25, nonmaxSuppression=True)
 lk_params = dict(winSize=(21, 21),
                  # maxLevel = 3,
                  criteria=(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 30, 0.01))
+
 
 # err_plt = Mplot2d(xlabel='img id', ylabel='m', title='error')
 
@@ -123,12 +123,12 @@ for img_id in range(0, 1000):
         print("R: " + str(R) + "\n" + "t: " + str(t))
 
         projMatr1 = np.array(
-            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])    # 第一个相机参数
-        projMatr2 = np.concatenate((R, t), axis=1)               # 第二个相机参数
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])  # 第一个相机参数
+        projMatr2 = np.concatenate((R, t), axis=1)  # 第二个相机参数
         projMatr1 = np.matmul(cam.K, projMatr1)  # 相机内参 相机外参
         projMatr2 = np.matmul(cam.K, projMatr2)
         points4D = cv.triangulatePoints(projMatr1, projMatr2, kp1.T, kp2.T)
-        points4D /= points4D[3]       # 归一化
+        points4D /= points4D[3]  # 归一化
         # print("points4D: " + str(points4D))
         points4D = points4D.T[:, 0:3]  # 取坐标点
         print("depth: " + str(points4D))
@@ -139,7 +139,7 @@ for img_id in range(0, 1000):
         line = kitti_pose[img_id].strip().split()
         x, y, z = float(line[3]), float(line[7]), float(line[11])
         absolute_scale = np.sqrt(
-            (x - x_prev)*(x - x_prev) + (y - y_prev)*(y - y_prev) + (z - z_prev)*(z - z_prev))
+            (x - x_prev) * (x - x_prev) + (y - y_prev) * (y - y_prev) + (z - z_prev) * (z - z_prev))
         print("absolute_scale: " + str(absolute_scale))
 
         cur_t = cur_t + absolute_scale * cur_R.dot(t)
@@ -174,7 +174,7 @@ for img_id in range(0, 1000):
 
         # stereo = cv.StereoBM_create(numDisparities=16, blockSize=15)
         disparity = sgbm(img, img_r)
-        cv.imshow("disparity", disparity/96.0)
+        cv.imshow("disparity", disparity / 96.0)
         cv.waitKey(1)
         # plt.imshow(disparity,'gray')
         # plt.show()
