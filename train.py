@@ -11,13 +11,12 @@ import torch.optim
 import torch.utils.data
 
 import models
-
 import custom_transforms
-from utils import tensor2array, save_checkpoint
+# from utils import tensor2array, save_checkpoint
 from datasets.sequence_folders import SequenceFolder
 from datasets.pair_folders import PairFolder
-from loss_functions import compute_smooth_loss, compute_photo_and_geometry_loss, compute_errors
-from logger import TermLogger, AverageMeter
+# from loss_functions import compute_smooth_loss, compute_photo_and_geometry_loss, compute_errors
+# from logger import TermLogger, AverageMeter
 from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description='Structure from Motion Learner training on KITTI and CityScapes Dataset',
@@ -93,7 +92,7 @@ def main():
         for i in range(2):
             output_writers.append(SummaryWriter(args.save_path / 'valid' / str(i)))
 
-    # Data loading code
+    # 加载训练集
     normalize = custom_transforms.Normalize(mean=[0.45, 0.45, 0.45], std=[0.225, 0.225, 0.225])
     train_transform = custom_transforms.Compose([
         custom_transforms.RandomHorizontalFlip(),
@@ -109,7 +108,6 @@ def main():
             transform=train_transform,
             seed=args.seed,
             train=True,
-            sequence_length=args.sequence_length,
             dataset=args.dataset
         )
     else:
@@ -119,3 +117,59 @@ def main():
             train=True,
             transform=train_transform
         )
+    # 加载验证集
+    if args.with_gt:
+        from datasets.validation_folders import ValidationSet
+        val_set = ValidationSet(
+            args.data,
+            transform=valid_transform,
+            dataset=args.dataset
+        )
+    else:
+        val_set = SequenceFolder(
+            args.data,
+            transform=valid_transform,
+            seed=args.seed,
+            train=False,
+            dataset=args.dataset
+        )
+    print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
+    print('{} samples found in {} valid scenes'.format(len(val_set), len(val_set.scenes)))
+    train_loader = torch.utils.data.DataLoader(
+        train_set, batch_size=args.batch_size, shuffle=True,
+        num_workers=args.workers, pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(
+        val_set, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=True)
+
+    if args.epoch_size == 0:
+        args.epoch_size = len(train_loader)
+
+    # 建立模型
+    print("=> creating model")
+    disp_net = models.DispResNet(args.resnet_layers, args.with_pretrain).to(device)
+    pose_net = models.PoseResNet(18, args.with_pretrain).to(device)
+    # 加载参数
+    if args.pretrained_disp:
+        print("=> using pre-trained weights for DispResNet")
+        weights = torch.load(args.pretrained_disp)
+        disp_net.load_state_dict(weights['state_dict'], strict=False)
+    if args.pretrained_pose:
+        print("=> using pre-trained weights for PoseResNet")
+        weights = torch.load(args.pretrained_pose)
+        pose_net.load_state_dict(weights['state_dict'], strict=False)
+    disp_net = torch.nn.DataParallel(disp_net)
+    pose_net = torch.nn.DataParallel(pose_net)
+    # 加载优化器
+    print('=> setting adam solver')
+    optim_params = [
+        {'params': disp_net.parameters(), 'lr': args.lr},
+        {'params': pose_net.parameters(), 'lr': args.lr}
+    ]
+    optimizer = torch.optim.Adam(optim_params,
+                                 betas=(args.momentum, args.beta),
+                                 weight_decay=args.weight_decay)
+
+
+if __name__ == '__main__':
+    main()
