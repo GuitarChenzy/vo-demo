@@ -10,7 +10,7 @@ while (flag):
     #flip(mat,mat,int)第三个参数：1左右翻  0 上下翻  -1 对角翻
     frame = cv2.flip(frame,1)
     cv2.imshow("Capture_Paizhao", frame)
-    k = cv2.waitKey(1) & 0xFF
+    k = cv2.waitKey(25) & 0xFF
     if k == ord(' '):  # 按下空格键，进入下面的保存图片操作(其他键位需要切换中英文和大小写太麻烦，直接空格简单)
         cv2.imwrite("/home/czy/Desktop/" + str(index) + ".jpg", frame)
         print("save" + str(index) + ".jpg successfuly!")
