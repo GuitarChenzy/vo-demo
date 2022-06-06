@@ -241,7 +241,7 @@ def train(args, train_loader, disp_net, pose_net, optimizer, epoch_size, logger,
     end = time.time()
     logger.train_bar.update(0)
 
-    for i, (img_l, img_r, intrinsics_l, intrinsics_r) in enumerate(train_loader):
+    for i, (img_l, img_r, intrinsics_l, intrinsics_r, img_l2) in enumerate(train_loader):
         log_losses = i > 0 and n_iter % args.print_freq == 0
 
         # measure data loading time
@@ -249,20 +249,18 @@ def train(args, train_loader, disp_net, pose_net, optimizer, epoch_size, logger,
         img_l = img_l.to(device)
         img_r = img_r.to(device)
         intrinsics_l = intrinsics_l.to(device)
+        intrinsics_r = intrinsics_r.to(device)
+        imgl2 = img_l2.to(device)
 
         # compute output
         depth_l, depth_r = compute_depth(disp_net, img_l, img_r)
-        img_ld = torch.cat((img_l, depth_l), 2)
-        img_rd = torch.cat((img_r, depth_r), 2)
+        poses, poses_inv = compute_pose_with_inv(pose_net, img_l, imgl2)
 
-        poses, poses_inv = compute_pose_with_inv(pose_net, img_ld, img_rd)
-
+        # loss function
         loss_1, loss_3 = compute_photo_and_geometry_loss(img_l, img_r, intrinsics_l, depth_l, depth_r,
                                                          poses, poses_inv, args.num_scales, args.with_ssim,
                                                          args.with_mask, args.with_auto_mask, args.padding_mode)
-
         loss_2 = compute_smooth_loss(depth_l, img_l, depth_r, img_r)
-
         loss = w1 * loss_1 + w2 * loss_2 + w3 * loss_3
 
         if log_losses:

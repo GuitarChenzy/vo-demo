@@ -90,15 +90,12 @@ class PoseResNet(nn.Module):
     def init_weights(self):
         pass
 
-    def forward(self, imgL1, imgL2, imgR1, imgR2):
+    def forward(self, imgL1, imgL2):
         xl = torch.cat([imgL1, imgL2], 1)
-        xr = torch.cat([imgR1, imgR2], 1)
         print(xl.size())
         featuresl = self.encoder(xl)
-        featuresr = self.encoder(xr)
-        pose_l = self.decoder([featuresl])
-        pose_r = self.decoder([featuresr])
-        return pose_l, pose_r
+        pose = self.decoder([featuresl])
+        return pose
 
 
 if __name__ == "__main__":
@@ -107,14 +104,11 @@ if __name__ == "__main__":
     model = PoseResNet().cuda()
     model.train()
 
-    img_l1 = torch.randn(1, 3, 256, 832).cuda()
-    depth_l1 = torch.randn(1, 1, 256, 832).cuda()
+    img_l1 = torch.randn(1, 4, 256, 832).cuda()
     img_l2 = torch.randn(1, 4, 256, 832).cuda()
-    img_r1 = torch.randn(1, 4, 256, 832).cuda()
-    img_r2 = torch.randn(1, 4, 256, 832).cuda()
-    pose = model(img_l1, img_l2, img_r1, img_r2)
+    pose = model(img_l1, img_l2)
 
-    print('pose: ', pose[0],'\n',pose[1])
+    print('pose: ', pose)
     # from torchsummary import summary
     #
     # summary(model, img_l1, img_l2, img_r1, img_r2)
