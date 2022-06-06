@@ -107,7 +107,8 @@ if __name__ == "__main__":
     model = PoseResNet().cuda()
     model.train()
 
-    img_l1 = torch.randn(1, 4, 256, 832).cuda()
+    img_l1 = torch.randn(1, 3, 256, 832).cuda()
+    depth_l1 = torch.randn(1, 1, 256, 832).cuda()
     img_l2 = torch.randn(1, 4, 256, 832).cuda()
     img_r1 = torch.randn(1, 4, 256, 832).cuda()
     img_r2 = torch.randn(1, 4, 256, 832).cuda()

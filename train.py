@@ -170,11 +170,11 @@ def main():
                                  betas=(args.momentum, args.beta),
                                  weight_decay=args.weight_decay)
 
-    with open(args.save_path/args.log_summary, 'w') as csvfile:
+    with open(args.save_path / args.log_summary, 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter='\t')
         writer.writerow(['train_loss', 'validation_loss'])
 
-    with open(args.save_path/args.log_full, 'w') as csvfile:
+    with open(args.save_path / args.log_full, 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter='\t')
         writer.writerow(['train_loss', 'photo_loss', 'smooth_loss', 'geometry_consistency_loss'])
 
@@ -195,7 +195,8 @@ def main():
         if args.with_gt:
             errors, error_names = validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers)
         else:
-            errors, error_names = validate_without_gt(args, val_loader, disp_net, pose_net, epoch, logger, output_writers)
+            errors, error_names = validate_without_gt(args, val_loader, disp_net, pose_net, epoch, logger,
+                                                      output_writers)
         error_string = ', '.join('{} : {:.3f}'.format(name, error) for name, error in zip(error_names, errors))
         logger.valid_writer.write(' * Avg {}'.format(error_string))
 
@@ -220,7 +221,7 @@ def main():
             },
             is_best)
 
-        with open(args.save_path/args.log_summary, 'a') as csvfile:
+        with open(args.save_path / args.log_summary, 'a') as csvfile:
             writer = csv.writer(csvfile, delimiter='\t')
             writer.writerow([train_loss, decisive_error])
     logger.epoch_bar.finish()
@@ -240,26 +241,29 @@ def train(args, train_loader, disp_net, pose_net, optimizer, epoch_size, logger,
     end = time.time()
     logger.train_bar.update(0)
 
-    for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(train_loader):
+    for i, (img_l, img_r, intrinsics_l, intrinsics_r) in enumerate(train_loader):
         log_losses = i > 0 and n_iter % args.print_freq == 0
 
         # measure data loading time
         data_time.update(time.time() - end)
-        tgt_img = tgt_img.to(device)
-        ref_imgs = [img.to(device) for img in ref_imgs]
-        intrinsics = intrinsics.to(device)
+        img_l = img_l.to(device)
+        img_r = img_r.to(device)
+        intrinsics_l = intrinsics_l.to(device)
 
         # compute output
-        tgt_depth, ref_depths = compute_depth(disp_net, tgt_img, ref_imgs)
-        poses, poses_inv = compute_pose_with_inv(pose_net, tgt_img, ref_imgs)
+        depth_l, depth_r = compute_depth(disp_net, img_l, img_r)
+        img_ld = torch.cat((img_l, depth_l), 2)
+        img_rd = torch.cat((img_r, depth_r), 2)
 
-        loss_1, loss_3 = compute_photo_and_geometry_loss(tgt_img, ref_imgs, intrinsics, tgt_depth, ref_depths,
+        poses, poses_inv = compute_pose_with_inv(pose_net, img_ld, img_rd)
+
+        loss_1, loss_3 = compute_photo_and_geometry_loss(img_l, img_r, intrinsics_l, depth_l, depth_r,
                                                          poses, poses_inv, args.num_scales, args.with_ssim,
                                                          args.with_mask, args.with_auto_mask, args.padding_mode)
 
-        loss_2 = compute_smooth_loss(tgt_depth, tgt_img, ref_depths, ref_imgs)
+        loss_2 = compute_smooth_loss(depth_l, img_l, depth_r, img_r)
 
-        loss = w1*loss_1 + w2*loss_2 + w3*loss_3
+        loss = w1 * loss_1 + w2 * loss_2 + w3 * loss_3
 
         if log_losses:
             train_writer.add_scalar('photometric_error', loss_1.item(), n_iter)
@@ -279,10 +283,10 @@ def train(args, train_loader, disp_net, pose_net, optimizer, epoch_size, logger,
         batch_time.update(time.time() - end)
         end = time.time()
 
-        with open(args.save_path/args.log_full, 'a') as csvfile:
+        with open(args.save_path / args.log_full, 'a') as csvfile:
             writer = csv.writer(csvfile, delimiter='\t')
             writer.writerow([loss.item(), loss_1.item(), loss_2.item(), loss_3.item()])
-        logger.train_bar.update(i+1)
+        logger.train_bar.update(i + 1)
         if i % args.print_freq == 0:
             logger.train_writer.write('Train: Time {} Data {} Loss {}'.format(batch_time, data_time, losses))
         if i >= epoch_size - 1:
@@ -324,7 +328,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_net, epoch, logger, out
                 output_writers[i].add_image('val Input', tensor2array(tgt_img[0]), 0)
 
             output_writers[i].add_image('val Dispnet Output Normalized',
-                                        tensor2array(1/tgt_depth[0][0], max_value=None, colormap='magma'),
+                                        tensor2array(1 / tgt_depth[0][0], max_value=None, colormap='magma'),
                                         epoch)
             output_writers[i].add_image('val Depth Output',
                                         tensor2array(tgt_depth[0][0], max_value=10),
@@ -348,7 +352,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_net, epoch, logger, out
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-        logger.valid_bar.update(i+1)
+        logger.valid_bar.update(i + 1)
         if i % args.print_freq == 0:
             logger.valid_writer.write('valid: Time {} Loss {}'.format(batch_time, losses))
 
@@ -379,7 +383,7 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
 
         # compute output
         output_disp = disp_net(tgt_img)
-        output_depth = 1/output_disp[:, 0]
+        output_depth = 1 / output_disp[:, 0]
 
         if log_outputs and i < len(output_writers):
             if epoch == 0:
@@ -389,7 +393,7 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
                                             tensor2array(depth_to_show, max_value=10),
                                             epoch)
                 depth_to_show[depth_to_show == 0] = 1000
-                disp_to_show = (1/depth_to_show).clamp(0, 10)
+                disp_to_show = (1 / depth_to_show).clamp(0, 10)
                 output_writers[i].add_image('val target Disparity Normalized',
                                             tensor2array(disp_to_show, max_value=None, colormap='magma'),
                                             epoch)
@@ -410,19 +414,20 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-        logger.valid_bar.update(i+1)
+        logger.valid_bar.update(i + 1)
         if i % args.print_freq == 0:
-            logger.valid_writer.write('valid: Time {} Abs Error {:.4f} ({:.4f})'.format(batch_time, errors.val[0], errors.avg[0]))
+            logger.valid_writer.write(
+                'valid: Time {} Abs Error {:.4f} ({:.4f})'.format(batch_time, errors.val[0], errors.avg[0]))
     logger.valid_bar.update(len(val_loader))
     return errors.avg, error_names
 
 
 def compute_depth(disp_net, tgt_img, ref_imgs):
-    tgt_depth = [1/disp for disp in disp_net(tgt_img)]
+    tgt_depth = [1 / disp for disp in disp_net(tgt_img)]
 
     ref_depths = []
     for ref_img in ref_imgs:
-        ref_depth = [1/disp for disp in disp_net(ref_img)]
+        ref_depth = [1 / disp for disp in disp_net(ref_img)]
         ref_depths.append(ref_depth)
 
     return tgt_depth, ref_depths
