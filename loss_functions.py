@@ -45,10 +45,14 @@ class SSIM(nn.Module):
 compute_ssim_loss = SSIM().to(device)
 
 
+# 双目光度一致性损失
+# def binocular_photometric_loss(img_l, img_r, img_ld, img_rd):
+
+
 # photometric loss
 # geometry consistency loss
-def compute_photo_and_geometry_loss(tgt_img, ref_imgs, intrinsics, tgt_depth, ref_depths, poses, poses_inv, max_scales, with_ssim, with_mask, with_auto_mask, padding_mode):
-
+def compute_photo_and_geometry_loss(tgt_img, ref_imgs, intrinsics, tgt_depth, ref_depths, poses, poses_inv, max_scales,
+                                    with_ssim, with_mask, with_auto_mask, padding_mode):
     photo_loss = 0
     geometry_loss = 0
 
@@ -81,10 +85,14 @@ def compute_photo_and_geometry_loss(tgt_img, ref_imgs, intrinsics, tgt_depth, re
                 tgt_depth_scaled = F.interpolate(tgt_depth[s], (h, w), mode='nearest')
                 ref_depth_scaled = F.interpolate(ref_depth[s], (h, w), mode='nearest')
 
-            photo_loss1, geometry_loss1 = compute_pairwise_loss(tgt_img_scaled, ref_img_scaled, tgt_depth_scaled, ref_depth_scaled, pose,
-                                                                intrinsic_scaled, with_ssim, with_mask, with_auto_mask, padding_mode)
-            photo_loss2, geometry_loss2 = compute_pairwise_loss(ref_img_scaled, tgt_img_scaled, ref_depth_scaled, tgt_depth_scaled, pose_inv,
-                                                                intrinsic_scaled, with_ssim, with_mask, with_auto_mask, padding_mode)
+            photo_loss1, geometry_loss1 = compute_pairwise_loss(tgt_img_scaled, ref_img_scaled, tgt_depth_scaled,
+                                                                ref_depth_scaled, pose,
+                                                                intrinsic_scaled, with_ssim, with_mask, with_auto_mask,
+                                                                padding_mode)
+            photo_loss2, geometry_loss2 = compute_pairwise_loss(ref_img_scaled, tgt_img_scaled, ref_depth_scaled,
+                                                                tgt_depth_scaled, pose_inv,
+                                                                intrinsic_scaled, with_ssim, with_mask, with_auto_mask,
+                                                                padding_mode)
 
             photo_loss += (photo_loss1 + photo_loss2)
             geometry_loss += (geometry_loss1 + geometry_loss2)
@@ -92,16 +100,18 @@ def compute_photo_and_geometry_loss(tgt_img, ref_imgs, intrinsics, tgt_depth, re
     return photo_loss, geometry_loss
 
 
-def compute_pairwise_loss(tgt_img, ref_img, tgt_depth, ref_depth, pose, intrinsic, with_ssim, with_mask, with_auto_mask, padding_mode):
-
-    ref_img_warped, valid_mask, projected_depth, computed_depth = inverse_warp2(ref_img, tgt_depth, ref_depth, pose, intrinsic, padding_mode)
+def compute_pairwise_loss(tgt_img, ref_img, tgt_depth, ref_depth, pose, intrinsic, with_ssim, with_mask, with_auto_mask,
+                          padding_mode):
+    ref_img_warped, valid_mask, projected_depth, computed_depth = inverse_warp2(ref_img, tgt_depth, ref_depth, pose,
+                                                                                intrinsic, padding_mode)
 
     diff_img = (tgt_img - ref_img_warped).abs().clamp(0, 1)
 
     diff_depth = ((computed_depth - projected_depth).abs() / (computed_depth + projected_depth)).clamp(0, 1)
 
     if with_auto_mask == True:
-        auto_mask = (diff_img.mean(dim=1, keepdim=True) < (tgt_img - ref_img).abs().mean(dim=1, keepdim=True)).float() * valid_mask
+        auto_mask = (diff_img.mean(dim=1, keepdim=True) < (tgt_img - ref_img).abs().mean(dim=1,
+                                                                                         keepdim=True)).float() * valid_mask
         valid_mask = auto_mask
 
     if with_ssim == True:
@@ -190,7 +200,7 @@ def compute_errors(gt, pred, dataset):
         valid_gt = current_gt[valid]
         valid_pred = current_pred[valid].clamp(1e-3, max_depth)
 
-        valid_pred = valid_pred * torch.median(valid_gt)/torch.median(valid_pred)
+        valid_pred = valid_pred * torch.median(valid_gt) / torch.median(valid_pred)
 
         thresh = torch.max((valid_gt / valid_pred), (valid_pred / valid_gt))
         a1 += (thresh < 1.25).float().mean()
@@ -200,7 +210,6 @@ def compute_errors(gt, pred, dataset):
         abs_diff += torch.mean(torch.abs(valid_gt - valid_pred))
         abs_rel += torch.mean(torch.abs(valid_gt - valid_pred) / valid_gt)
 
-        sq_rel += torch.mean(((valid_gt - valid_pred)**2) / valid_gt)
+        sq_rel += torch.mean(((valid_gt - valid_pred) ** 2) / valid_gt)
 
     return [metric.item() / batch_size for metric in [abs_diff, abs_rel, sq_rel, a1, a2, a3]]
-

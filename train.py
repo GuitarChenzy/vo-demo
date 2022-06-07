@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser(description='Structure from Motion Learner trai
 parser.add_argument('data', metavar='DIR', help='path to dataset')
 parser.add_argument('--folder-type', type=str, choices=['sequence', 'pair'], default='sequence',
                     help='the dataset dype to train')
-parser.add_argument('-j', '--workers', default=4, type=int, metavar='N', help='number of data loading workers')
+parser.add_argument('-j', '--workers', default=2, type=int, metavar='N', help='number of data loading workers')
 parser.add_argument('--epochs', default=200, type=int, metavar='N', help='number of total epochs to run')
 parser.add_argument('--epoch-size', default=0, type=int, metavar='N',
                     help='manual epoch size (will match dataset size if not set)')
@@ -49,6 +49,8 @@ parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for d
 parser.add_argument('-c', '--geometry-consistency-weight', type=float, help='weight for depth consistency loss',
                     metavar='W', default=0.5)
 parser.add_argument('--with-ssim', type=int, default=1, help='with ssim or not')
+parser.add_argument('--with-mask', type=int, default=1, help='with the the mask for moving objects and occlusions or not')
+parser.add_argument('--with-auto-mask', type=int,  default=0, help='with the the mask for stationary points')
 parser.add_argument('--with-pretrain', type=int, default=1, help='with or without imagenet pretrain for resnet')
 parser.add_argument('--dataset', type=str, choices=['kitti', 'nyu'], default='kitti', help='the dataset to train')
 parser.add_argument('--pretrained-disp', dest='pretrained_disp', default=None, metavar='PATH',
@@ -62,6 +64,8 @@ parser.add_argument('--padding-mode', type=str, choices=['zeros', 'border'], def
                          ' zeros will null gradients outside target image border will only null gradients of the coordinate outside (x or y)')
 parser.add_argument('--with-gt', action='store_true', help='use ground truth for validation. \
                     You need to store it in npy 2D arrays see data/kitti_raw_loader.py for an example')
+parser.add_argument('--baseline', type=float, help='', default=0.573)
+parser.add_argument('--f', type=float, help='', default=718.856)
 
 best_error = -1
 n_iter = 0
@@ -187,6 +191,7 @@ def main():
 
         # train for one epoch
         logger.reset_train_bar()
+        logger.train_bar.start()
         train_loss = train(args, train_loader, disp_net, pose_net, optimizer, args.epoch_size, logger, training_writer)
         logger.train_writer.write(' * Avg Loss : {:.3f}'.format(train_loss))
 
@@ -253,7 +258,7 @@ def train(args, train_loader, disp_net, pose_net, optimizer, epoch_size, logger,
         imgl2 = img_l2.to(device)
 
         # compute output
-        depth_l, depth_r = compute_depth(disp_net, img_l, img_r)
+        depth_l, depth_r = compute_depth(args, disp_net, img_l, img_r)
         poses, poses_inv = compute_pose_with_inv(pose_net, img_l, imgl2)
 
         # loss function
@@ -315,10 +320,10 @@ def validate_without_gt(args, val_loader, disp_net, pose_net, epoch, logger, out
         intrinsics_inv = intrinsics_inv.to(device)
 
         # compute output
-        tgt_depth = [1 / disp_net(tgt_img)]
+        tgt_depth = [args.baseline * args.f / disp_net(tgt_img)]
         ref_depths = []
         for ref_img in ref_imgs:
-            ref_depth = [1 / disp_net(ref_img)]
+            ref_depth = [args.baseline * args.f / disp_net(ref_img)]
             ref_depths.append(ref_depth)
 
         if log_outputs and i < len(output_writers):
@@ -381,7 +386,7 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
 
         # compute output
         output_disp = disp_net(tgt_img)
-        output_depth = 1 / output_disp[:, 0]
+        output_depth = args.baseline * args.f / output_disp[:, 0]
 
         if log_outputs and i < len(output_writers):
             if epoch == 0:
@@ -420,25 +425,15 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
     return errors.avg, error_names
 
 
-def compute_depth(disp_net, tgt_img, ref_imgs):
-    tgt_depth = [1 / disp for disp in disp_net(tgt_img)]
-
-    ref_depths = []
-    for ref_img in ref_imgs:
-        ref_depth = [1 / disp for disp in disp_net(ref_img)]
-        ref_depths.append(ref_depth)
-
-    return tgt_depth, ref_depths
+def compute_depth(args, disp_net, img_l, img_r):
+    img_l_dis, img_r_dis = disp_net(img_l, img_r)
+    b, f = args.baseline, args.f
+    img_ld, img_rd = b * f / img_l_dis, b * f / img_r_dis
+    return img_ld, img_rd
 
 
-def compute_pose_with_inv(pose_net, tgt_img, ref_imgs):
-    poses = []
-    poses_inv = []
-    for ref_img in ref_imgs:
-        poses.append(pose_net(tgt_img, ref_img))
-        poses_inv.append(pose_net(ref_img, tgt_img))
-
-    return poses, poses_inv
+def compute_pose_with_inv(pose_net, img_l1, img_l2):
+    return pose_net(img_l1, img_l2), pose_net(img_l2, img_l1)
 
 
 if __name__ == '__main__':

@@ -63,12 +63,12 @@ class SequenceFolder(data.Dataset):
             intrinsics_r = np.genfromtxt(scene_r + '/cam.txt').astype(np.float32).reshape((3, 3))
             img_l, img_r = sorted(scene_l.files('*.jpg')), sorted(scene_r.files('*.jpg'))
             # print(scene, img_l[0], img_r[0], img_l[1])
-            sample = {'intrinsics_2': intrinsics_l, 'intrinsics_3': intrinsics_r,
+            sample = {'intrinsics_l': intrinsics_l, 'intrinsics_r': intrinsics_r,
                       'img_l': img_l[0], 'img_r': img_r[0],
                       'img_l2': img_l[0]}
             sequence_set.append(sample)
             for i in range(1, len(img_l)):
-                sample = {'intrinsics_2': intrinsics_l, 'intrinsics_3': intrinsics_r,
+                sample = {'intrinsics_l': intrinsics_l, 'intrinsics_r': intrinsics_r,
                           'img_l': img_l[i - 1], 'img_r': img_r[i - 1],
                           'img_l2': img_l[i]}
 
