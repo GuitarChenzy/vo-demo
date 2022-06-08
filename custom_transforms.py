@@ -24,8 +24,9 @@ class Normalize(object):
         self.std = std
 
     def __call__(self, images, intrinsics):
-        for t, m, s in zip(images, self.mean, self.std):
-            t.sub_(m).div_(s)
+        for tensor in images:
+            for t, m, s in zip(tensor, self.mean, self.std):
+                t.sub_(m).div_(s)
         return images, intrinsics
 
 
@@ -34,10 +35,11 @@ class ArrayToTensor(object):
 
     def __call__(self, images, intrinsics):
         tensors = []
+        for im in images:
             # put it from HWC to CHW format
-        im = np.transpose(images, (2, 0, 1))
+            im = np.transpose(im, (2, 0, 1))
             # handle numpy array
-        tensors.append(torch.from_numpy(im).float()/255)
+            tensors.append(torch.from_numpy(im).float()/255)
         return tensors, intrinsics
 
 
@@ -48,7 +50,7 @@ class RandomHorizontalFlip(object):
         assert intrinsics is not None
         if random.random() < 0.5:
             output_intrinsics = np.copy(intrinsics)
-            output_images = np.copy(np.fliplr(images))
+            output_images = [np.copy(np.fliplr(im)) for im in images]
             w = output_images[0].shape[1]
             output_intrinsics[0, 2] = w - output_intrinsics[0, 2]
         else:
@@ -63,7 +65,8 @@ class RandomScaleCrop(object):
     def __call__(self, images, intrinsics):
         assert intrinsics is not None
         output_intrinsics = np.copy(intrinsics)
-        in_h, in_w, _ = images.shape
+
+        in_h, in_w, _ = images[0].shape
         x_scaling, y_scaling = np.random.uniform(1, 1.15, 2)
         scaled_h, scaled_w = int(in_h * y_scaling), int(in_w * x_scaling)
 

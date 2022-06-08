@@ -55,9 +55,13 @@ def compute_photo_and_geometry_loss(tgt_img, ref_imgs, intrinsics, tgt_depth, re
                                     with_ssim, with_mask, with_auto_mask, padding_mode):
     photo_loss = 0
     geometry_loss = 0
-
+    ref_img_list = []
+    ref_img_list.append(ref_imgs)
+    pose_list, pose_inv_list = [], []
+    pose_list.append(poses)
+    pose_inv_list.append(poses_inv)
     num_scales = min(len(tgt_depth), max_scales)
-    for ref_img, ref_depth, pose, pose_inv in zip(ref_imgs, ref_depths, poses, poses_inv):
+    for ref_img, pose, pose_inv in zip(ref_img_list, pose_list, pose_inv_list):
         for s in range(num_scales):
 
             # # downsample img
@@ -76,14 +80,14 @@ def compute_photo_and_geometry_loss(tgt_img, ref_imgs, intrinsics, tgt_depth, re
             # upsample depth
             b, _, h, w = tgt_img.size()
             tgt_img_scaled = tgt_img
-            ref_img_scaled = ref_img
+            ref_img_scaled = ref_img.cuda()
             intrinsic_scaled = intrinsics
             if s == 0:
                 tgt_depth_scaled = tgt_depth[s]
-                ref_depth_scaled = ref_depth[s]
+                ref_depth_scaled = ref_depths[s]
             else:
                 tgt_depth_scaled = F.interpolate(tgt_depth[s], (h, w), mode='nearest')
-                ref_depth_scaled = F.interpolate(ref_depth[s], (h, w), mode='nearest')
+                ref_depth_scaled = F.interpolate(ref_depths[s], (h, w), mode='nearest')
 
             photo_loss1, geometry_loss1 = compute_pairwise_loss(tgt_img_scaled, ref_img_scaled, tgt_depth_scaled,
                                                                 ref_depth_scaled, pose,
@@ -102,6 +106,10 @@ def compute_photo_and_geometry_loss(tgt_img, ref_imgs, intrinsics, tgt_depth, re
 
 def compute_pairwise_loss(tgt_img, ref_img, tgt_depth, ref_depth, pose, intrinsic, with_ssim, with_mask, with_auto_mask,
                           padding_mode):
+    # ref_img = ref_img.unsqueeze(0)
+    # ref_depth = ref_depth.unsqueeze(0)
+    # pose = pose.unsqueeze(0)
+    # print(pose.shape)
     ref_img_warped, valid_mask, projected_depth, computed_depth = inverse_warp2(ref_img, tgt_depth, ref_depth, pose,
                                                                                 intrinsic, padding_mode)
 
@@ -110,8 +118,9 @@ def compute_pairwise_loss(tgt_img, ref_img, tgt_depth, ref_depth, pose, intrinsi
     diff_depth = ((computed_depth - projected_depth).abs() / (computed_depth + projected_depth)).clamp(0, 1)
 
     if with_auto_mask == True:
-        auto_mask = (diff_img.mean(dim=1, keepdim=True) < (tgt_img - ref_img).abs().mean(dim=1,
-                                                                                         keepdim=True)).float() * valid_mask
+        # print(diff_img.is_cuda,tgt_img.is_cuda,ref_img.is_cuda,valid_mask.is_cuda)
+        auto_mask = (diff_img.mean(dim=1, keepdim=True) < (tgt_img - ref_img).abs().
+                     mean(dim=1, keepdim=True)).float() * valid_mask
         valid_mask = auto_mask
 
     if with_ssim == True:
@@ -146,6 +155,7 @@ def compute_smooth_loss(tgt_depth, tgt_img, ref_depths, ref_imgs):
         """
 
         # normalize
+        # print('disp.shape: ',disp.shape,'img.shape: ',img.shape)
         mean_disp = disp.mean(2, True).mean(3, True)
         norm_disp = disp / (mean_disp + 1e-7)
         disp = norm_disp
@@ -162,9 +172,7 @@ def compute_smooth_loss(tgt_depth, tgt_img, ref_depths, ref_imgs):
         return grad_disp_x.mean() + grad_disp_y.mean()
 
     loss = get_smooth_loss(tgt_depth[0], tgt_img)
-
-    for ref_depth, ref_img in zip(ref_depths, ref_imgs):
-        loss += get_smooth_loss(ref_depth[0], ref_img)
+    loss += get_smooth_loss(ref_depths[0], ref_imgs)
 
     return loss
 

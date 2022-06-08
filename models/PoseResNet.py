@@ -59,9 +59,9 @@ class PoseDecoder(nn.Module):
             out = self.convs[("pose", i)](out)
             if i != 2:
                 out = self.relu(out)
-        print(out.size())
+        # print(out.size())
         x = out.view(1, -1, 6 * 8 * 26)
-        print('x: ',x.size())
+        # print('x: ',x.size())
         x = self.dropout1(x)
         self.lstm.flatten_parameters()
         x, _ = self.lstm(x)
@@ -70,12 +70,12 @@ class PoseDecoder(nn.Module):
         x = x.contiguous().view(1, -1, 1024)
         x = self.fc_lstm_1(x)
         x = self.fc_lstm_2(x)
-        print('x: ', x.size())
+        # print('x: ', x.size())
 
         out = x.mean(1)
-        print('out: ', out.size())  # torch.Size([2, 6])
+        # print('out: ', out.size())  # torch.Size([2, 6])
         pose = 0.01 * out.view(-1, 6)
-        print('out: ', out.size())
+        # print('out: ', out.size())
 
         return pose
 
@@ -92,7 +92,7 @@ class PoseResNet(nn.Module):
 
     def forward(self, imgL1, imgL2):
         xl = torch.cat([imgL1, imgL2], 1)
-        print(xl.size())
+        # print(xl.size())
         featuresl = self.encoder(xl)
         pose = self.decoder([featuresl])
         return pose

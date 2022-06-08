@@ -87,16 +87,11 @@ class ResnetEncoder(nn.Module):
         if num_layers > 34:
             self.num_ch_enc[1:] *= 4
 
-    def forward(self, input_image,):
+    def forward(self, input_image, ):
         self.features = []
         x = input_image
-        print('Encoder Input Size: ', x.size())
-        if self.num_input_images > 1:
-            self.conv1 = nn.Conv2d(8, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False).cuda()
-            x = self.conv1(x)
-        else:
-            x = self.encoder.conv1(x)
+        #print('Encoder Input Size: ', x.size())
+        x = self.encoder.conv1(x)
         x = self.encoder.bn1(x)
         self.features.append(self.encoder.relu(x))
         self.features.append(self.encoder.layer1(self.encoder.maxpool(self.features[-1])))
@@ -104,8 +99,8 @@ class ResnetEncoder(nn.Module):
         self.features.append(self.encoder.layer3(self.features[-1]))
         self.features.append(self.encoder.layer4(self.features[-1]))
 
-        for f in self.features:
-            print('Encoder Output Size: ', f.shape)
+        #for f in self.features:
+            #print('Encoder Output Size: ', f.shape)
 
         return self.features
 

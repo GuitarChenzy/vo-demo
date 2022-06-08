@@ -38,7 +38,7 @@ class Conv3x3(nn.Module):
             self.pad = nn.ReflectionPad2d(1)
         else:
             self.pad = nn.ZeroPad2d(1)
-        print('Conv2d: ',int(in_channels), int(out_channels))
+        # print('Conv2d: ', int(in_channels), int(out_channels))
         self.conv = nn.Conv2d(int(in_channels), int(out_channels), 3)
 
     def forward(self, x):
@@ -94,7 +94,7 @@ class DepthDecoder(nn.Module):
 
         # decoder
         x = input_features[-1]
-        print('Decoder Input Size: ',x.shape)
+        # print('Decoder Input Size: ', x.shape)
         for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)
             x = [upsample(x)]
@@ -106,8 +106,8 @@ class DepthDecoder(nn.Module):
                 self.outputs.append(self.alpha * self.sigmoid(self.convs[("dispconv", i)](x)) + self.beta)
 
         self.outputs = self.outputs[::-1]
-        for f in self.outputs:
-            print('Decoder Output Size: ', f.shape)
+        # for f in self.outputs:
+            # print('Decoder Output Size: ', f.shape)
         return self.outputs
 
 
@@ -132,7 +132,6 @@ class DispResNet(nn.Module):
 
 
 if __name__ == "__main__":
-
     # model = DispResNet()
     # print(model)
 
@@ -149,9 +148,13 @@ if __name__ == "__main__":
     # print(tgt_depth[0].size())
     #
 
-    model = DispResNet().cuda()
-    tgt_img = torch.randn(2, 3, 256, 832).cuda()
-    output = model(tgt_img)
+    # model = DispResNet().cuda()
+    img_l = torch.randn(3, 256, 832).cuda()
+    img_r = torch.randn(3, 256, 832).cuda()
+    img_l = img_l.unsqueeze(0)
+    img_r = img_r.unsqueeze(0)
+    tgt_img = torch.cat((img_l, img_r), dim=0)
+    print(tgt_img.shape)
+    # output = model(tgt_img)
     # from torchsummary import summary
     # summary(model,tgt_img)
-

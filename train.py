@@ -49,8 +49,9 @@ parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for d
 parser.add_argument('-c', '--geometry-consistency-weight', type=float, help='weight for depth consistency loss',
                     metavar='W', default=0.5)
 parser.add_argument('--with-ssim', type=int, default=1, help='with ssim or not')
-parser.add_argument('--with-mask', type=int, default=1, help='with the the mask for moving objects and occlusions or not')
-parser.add_argument('--with-auto-mask', type=int,  default=0, help='with the the mask for stationary points')
+parser.add_argument('--with-mask', type=int, default=1,
+                    help='with the the mask for moving objects and occlusions or not')
+parser.add_argument('--with-auto-mask', type=int, default=0, help='with the the mask for stationary points')
 parser.add_argument('--with-pretrain', type=int, default=1, help='with or without imagenet pretrain for resnet')
 parser.add_argument('--dataset', type=str, choices=['kitti', 'nyu'], default='kitti', help='the dataset to train')
 parser.add_argument('--pretrained-disp', dest='pretrained_disp', default=None, metavar='PATH',
@@ -64,6 +65,7 @@ parser.add_argument('--padding-mode', type=str, choices=['zeros', 'border'], def
                          ' zeros will null gradients outside target image border will only null gradients of the coordinate outside (x or y)')
 parser.add_argument('--with-gt', action='store_true', help='use ground truth for validation. \
                     You need to store it in npy 2D arrays see data/kitti_raw_loader.py for an example')
+parser.add_argument('--num-scales', '--number-of-scales', type=int, help='the number of scales', metavar='W', default=1)
 parser.add_argument('--baseline', type=float, help='', default=0.573)
 parser.add_argument('--f', type=float, help='', default=718.856)
 
@@ -262,7 +264,8 @@ def train(args, train_loader, disp_net, pose_net, optimizer, epoch_size, logger,
         poses, poses_inv = compute_pose_with_inv(pose_net, img_l, imgl2)
 
         # loss function
-        loss_1, loss_3 = compute_photo_and_geometry_loss(img_l, img_r, intrinsics_l, depth_l, depth_r,
+
+        loss_1, loss_3 = compute_photo_and_geometry_loss(img_l, img_l2, intrinsics_l, depth_l, depth_r,
                                                          poses, poses_inv, args.num_scales, args.with_ssim,
                                                          args.with_mask, args.with_auto_mask, args.padding_mode)
         loss_2 = compute_smooth_loss(depth_l, img_l, depth_r, img_r)
@@ -376,22 +379,28 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
 
     end = time.time()
     logger.valid_bar.update(0)
-    for i, (tgt_img, depth) in enumerate(val_loader):
-        tgt_img = tgt_img.to(device)
-        depth = depth.to(device)
+    for i, (img_l, depth_l, img_r, depth_r) in enumerate(val_loader):
+        img_l = img_l.to(device)
+        depth_l = depth_l.to(device)
+        img_r = img_r.to(device)
+        depth_r = depth_r.to(device)
 
         # check gt
-        if depth.nelement() == 0:
+        if depth_l.nelement() == 0 and depth_r.nelement() == 0:
             continue
 
         # compute output
-        output_disp = disp_net(tgt_img)
-        output_depth = args.baseline * args.f / output_disp[:, 0]
+        img_l = img_l.unsqueeze(0)
+        img_r = img_r.unsqueeze(0)
+        tgt_img = torch.cat((img_l, img_r), dim=0)
+        output_disp_l, output_disp_r = disp_net(tgt_img)
+        output_depth_l = args.baseline * args.f / output_disp_l[:, 0]
+        output_depth_r = args.baseline * args.f / output_disp_r[:, 0]
 
         if log_outputs and i < len(output_writers):
             if epoch == 0:
-                output_writers[i].add_image('val Input', tensor2array(tgt_img[0]), 0)
-                depth_to_show = depth[0]
+                output_writers[i].add_image('val Input', tensor2array(img_l), 0)
+                depth_to_show = output_depth_l
                 output_writers[i].add_image('val target Depth',
                                             tensor2array(depth_to_show, max_value=10),
                                             epoch)
@@ -402,17 +411,19 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
                                             epoch)
 
             output_writers[i].add_image('val Dispnet Output Normalized',
-                                        tensor2array(output_disp[0], max_value=None, colormap='magma'),
+                                        tensor2array(output_disp_l, max_value=None, colormap='magma'),
                                         epoch)
             output_writers[i].add_image('val Depth Output',
-                                        tensor2array(output_depth[0], max_value=10),
+                                        tensor2array(output_depth_l, max_value=10),
                                         epoch)
 
-        if depth.nelement() != output_depth.nelement():
-            b, h, w = depth.size()
-            output_depth = torch.nn.functional.interpolate(output_depth.unsqueeze(1), [h, w]).squeeze(1)
+        if depth_l.nelement() != output_depth_l.nelement():
+            b, h, w = depth_l.size()
+            output_depth_l = torch.nn.functional.interpolate(output_depth_l.unsqueeze(1), [h, w]).squeeze(1)
+            output_depth_r = torch.nn.functional.interpolate(output_depth_r.unsqueeze(1), [h, w]).squeeze(1)
 
-        errors.update(compute_errors(depth, output_depth, args.dataset))
+        errors.update((compute_errors(depth_l, output_depth_l, args.dataset) +
+                       compute_errors(depth_r, output_depth_r, args.dataset)) / 2)
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -426,9 +437,9 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
 
 
 def compute_depth(args, disp_net, img_l, img_r):
-    img_l_dis, img_r_dis = disp_net(img_l, img_r)
     b, f = args.baseline, args.f
-    img_ld, img_rd = b * f / img_l_dis, b * f / img_r_dis
+    img_ld = [b * f / disp for disp in disp_net(img_l)]
+    img_rd = [b * f / disp for disp in disp_net(img_r)]
     return img_ld, img_rd
 
 

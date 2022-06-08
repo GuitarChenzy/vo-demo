@@ -78,13 +78,21 @@ class SequenceFolder(data.Dataset):
 
     def __getitem__(self, index):
         sample = self.samples[index]
-        img_l, img_r = load_as_float(sample['img_l']), load_as_float(sample['img_r'])
+        img_l, img_r, img_l2 = load_as_float(sample['img_l']), load_as_float(sample['img_r']), \
+                               load_as_float(sample['img_l2'])
         if self.transform is not None:
-            img_l, intrinsics_l = self.transform(img_l, np.copy(sample['intrinsics_l']))
-            img_r, intrinsics_r = self.transform(img_r, np.copy(sample['intrinsics_r']))
+            imgs = []
+            imgs.append(img_l)
+            imgs.append(img_r)
+            imgs.append(img_l2)
+            img_s, intrinsics_l = self.transform(imgs, np.copy(sample['intrinsics_l']))
+            img_l, img_r, img_l2 = img_s[0], img_s[1], img_s[2]
+            intrinsics_r = np.copy(sample['intrinsics_r'])
+            # img_r, intrinsics_r = self.transform(img_r, np.copy(sample['intrinsics_r']))
+            # img_l2, intrinsics_l = self.transform(img_l2, np.copy(sample['intrinsics_l']))
         else:
             intrinsics_l, intrinsics_r = np.copy(sample['intrinsics_l']), np.copy(sample['intrinsics_r'])
-        return img_l, img_r, intrinsics_l, intrinsics_r
+        return img_l, img_r, intrinsics_l, intrinsics_r, img_l2
 
     def __len__(self):
         return len(self.samples)
@@ -93,4 +101,4 @@ class SequenceFolder(data.Dataset):
 if __name__ == '__main__':
     kitti = SequenceFolder(root='/media/czy/DATA/Share/Kitti/kitti_256')
     # len = 21288
-    print(kitti.__len__(), kitti.samples[0])
+    print(kitti.__len__(), type(kitti.__getitem__(0)[0]))
