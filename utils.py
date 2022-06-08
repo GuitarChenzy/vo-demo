@@ -44,13 +44,14 @@ def tensor2array(tensor, max_value=None, colormap='rainbow'):
     if max_value is None:
         max_value = tensor.max().item()
     if tensor.ndimension() == 2 or tensor.size(0) == 1:
-        norm_array = tensor.squeeze().numpy()/max_value
+        norm_array = tensor.squeeze().numpy() / max_value
         array = COLORMAPS[colormap](norm_array).astype(np.float32)
         array = array.transpose(2, 0, 1)
 
     elif tensor.ndimension() == 3:
-        assert(tensor.size(0) == 3)
-        array = 0.45 + tensor.numpy()*0.225
+        # print('tensor.shape ', tensor.shape)
+        assert (tensor.size(0) == 3)
+        array = 0.45 + tensor.numpy() * 0.225
     return array
 
 
@@ -58,9 +59,9 @@ def save_checkpoint(save_path, dispnet_state, exp_pose_state, is_best, filename=
     file_prefixes = ['dispnet', 'exp_pose']
     states = [dispnet_state, exp_pose_state]
     for (prefix, state) in zip(file_prefixes, states):
-        torch.save(state, save_path/'{}_{}'.format(prefix, filename))
+        torch.save(state, save_path / '{}_{}'.format(prefix, filename))
 
     if is_best:
         for prefix in file_prefixes:
-            shutil.copyfile(save_path/'{}_{}'.format(prefix, filename),
-                            save_path/'{}_model_best.pth.tar'.format(prefix))
+            shutil.copyfile(save_path / '{}_{}'.format(prefix, filename),
+                            save_path / '{}_model_best.pth.tar'.format(prefix))

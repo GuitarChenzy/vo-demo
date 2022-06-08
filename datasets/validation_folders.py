@@ -6,7 +6,7 @@ import os
 import torch
 
 
-def crawl_folders(folders_list, dataset='nyu'):
+def crawl_folders(folders_list, dataset='kitti'):
     img_ls, img_rs, depths_l, depths_r = [], [], [], []
     for folder in folders_list:
         folder_l, folder_r = folder + '02', folder + '03'
@@ -19,7 +19,8 @@ def crawl_folders(folders_list, dataset='nyu'):
         img_rs.extend(img_r)
         depths_l.extend(depth_l)
         depths_r.extend(depth_r)
-    return img_ls, depth_l, img_ls, depths_r
+    # print(len(img_ls),len(depths_l))
+    return img_ls, depths_l, img_ls, depths_r
 
 
 class ValidationSet(data.Dataset):
@@ -54,10 +55,10 @@ class ValidationSet(data.Dataset):
             depth_r = torch.from_numpy(np.load(self.depth_rs[index]).astype(np.float32))
 
         if self.transform is not None:
-            img_l, _ = self.transform(img_l, None)
-            img_r, _ = self.transform(img_r, None)
+            img_l, _ = self.transform([img_l], None)
+            img_r, _ = self.transform([img_r], None)
 
-        return img_l, depth_l, img_r, depth_r
+        return img_l[0], depth_l, img_r[0], depth_r
 
     def __len__(self):
         return len(self.img_ls)
@@ -65,4 +66,4 @@ class ValidationSet(data.Dataset):
 
 if __name__ == '__main__':
     kitti = ValidationSet(root='/media/czy/DATA/Share/Kitti/kitti_256')
-    print(kitti.__len__(), len(kitti[0]))
+    print(kitti.__len__(), len(kitti.__getitem__(0)))

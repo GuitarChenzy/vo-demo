@@ -193,7 +193,6 @@ def main():
 
         # train for one epoch
         logger.reset_train_bar()
-        logger.train_bar.start()
         train_loss = train(args, train_loader, disp_net, pose_net, optimizer, args.epoch_size, logger, training_writer)
         logger.train_writer.write(' * Avg Loss : {:.3f}'.format(train_loss))
 
@@ -246,6 +245,7 @@ def train(args, train_loader, disp_net, pose_net, optimizer, epoch_size, logger,
     pose_net.train()
 
     end = time.time()
+    logger.train_bar.start()
     logger.train_bar.update(0)
 
     for i, (img_l, img_r, intrinsics_l, intrinsics_r, img_l2) in enumerate(train_loader):
@@ -378,6 +378,7 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
     disp_net.eval()
 
     end = time.time()
+    logger.valid_bar.start()
     logger.valid_bar.update(0)
     for i, (img_l, depth_l, img_r, depth_r) in enumerate(val_loader):
         img_l = img_l.to(device)
@@ -390,31 +391,31 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
             continue
 
         # compute output
-        img_l = img_l.unsqueeze(0)
-        img_r = img_r.unsqueeze(0)
-        tgt_img = torch.cat((img_l, img_r), dim=0)
-        output_disp_l, output_disp_r = disp_net(tgt_img)
+        output_disp_l = disp_net(img_l)
+        # print('output_disp_l.shape: ', output_disp_l.shape)
+        output_disp_r = disp_net(img_r)
         output_depth_l = args.baseline * args.f / output_disp_l[:, 0]
         output_depth_r = args.baseline * args.f / output_disp_r[:, 0]
 
         if log_outputs and i < len(output_writers):
             if epoch == 0:
-                output_writers[i].add_image('val Input', tensor2array(img_l), 0)
-                depth_to_show = output_depth_l
+                output_writers[i].add_image('val Input', tensor2array(img_l[0]), 0)
+                depth_to_show = output_depth_l[0]
+                # print('output_depth_l.shape ', depth_to_show.shape)
                 output_writers[i].add_image('val target Depth',
                                             tensor2array(depth_to_show, max_value=10),
                                             epoch)
                 depth_to_show[depth_to_show == 0] = 1000
-                disp_to_show = (1 / depth_to_show).clamp(0, 10)
+                disp_to_show = (args.baseline * args.f / depth_to_show).clamp(0, 10)
                 output_writers[i].add_image('val target Disparity Normalized',
                                             tensor2array(disp_to_show, max_value=None, colormap='magma'),
                                             epoch)
 
             output_writers[i].add_image('val Dispnet Output Normalized',
-                                        tensor2array(output_disp_l, max_value=None, colormap='magma'),
+                                        tensor2array(output_disp_l[0], max_value=None, colormap='magma'),
                                         epoch)
             output_writers[i].add_image('val Depth Output',
-                                        tensor2array(output_depth_l, max_value=10),
+                                        tensor2array(output_depth_l[0], max_value=10),
                                         epoch)
 
         if depth_l.nelement() != output_depth_l.nelement():
@@ -422,8 +423,12 @@ def validate_with_gt(args, val_loader, disp_net, epoch, logger, output_writers=[
             output_depth_l = torch.nn.functional.interpolate(output_depth_l.unsqueeze(1), [h, w]).squeeze(1)
             output_depth_r = torch.nn.functional.interpolate(output_depth_r.unsqueeze(1), [h, w]).squeeze(1)
 
-        errors.update((compute_errors(depth_l, output_depth_l, args.dataset) +
-                       compute_errors(depth_r, output_depth_r, args.dataset)) / 2)
+        err_l = compute_errors(depth_l, output_depth_l, args.dataset)
+        err_r = compute_errors(depth_r, output_depth_r, args.dataset)
+        err = []
+        for l, r in zip(err_l, err_r):
+            err.append((l + r) / 2)
+        errors.update(err)
 
         # measure elapsed time
         batch_time.update(time.time() - end)
